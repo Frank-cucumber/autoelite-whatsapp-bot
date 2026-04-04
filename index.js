@@ -1,4 +1,4 @@
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 const QRCode = require('qrcode');
 const express = require('express');
 const pino = require('pino');
@@ -11,10 +11,10 @@ let isConnected = false;
 
 app.get('/', async (req, res) => {
     if (isConnected) {
-        return res.send('<h2 style="font-family:sans-serif;color:green">✅ AutoElite WhatsApp Bot is connected and running!</h2>');
+        return res.send('<h2 style="font-family:sans-serif;color:green;text-align:center;padding:40px">✅ AutoElite WhatsApp Bot is connected and running!</h2>');
     }
     if (!latestQR) {
-        return res.send('<h2 style="font-family:sans-serif">⏳ Waiting for QR code... Refresh in a few seconds.</h2>');
+        return res.send('<h2 style="font-family:sans-serif;text-align:center;padding:40px">⏳ Waiting for QR code... Refresh in a few seconds.</h2>');
     }
     const qrImage = await QRCode.toDataURL(latestQR);
     res.send(`
@@ -24,7 +24,7 @@ app.get('/', async (req, res) => {
             <p>Scan this QR code with WhatsApp to activate the bot</p>
             <p style="font-size:12px;color:#888">WhatsApp → Settings → Linked Devices → Link a Device</p>
             <img src="${qrImage}" style="width:300px;height:300px;border-radius:12px"/>
-            <p style="font-size:12px;color:#888">QR code refreshes automatically. Reload this page if it expires.</p>
+            <p style="font-size:12px;color:#888">Reload this page if the QR expires.</p>
         </body>
         </html>
     `);
@@ -34,27 +34,32 @@ app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
 async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState('auth');
+    const { version } = await fetchLatestBaileysVersion();
+    console.log('Using Baileys version:', version);
 
     const sock = makeWASocket({
+        version,
         auth: state,
         logger: pino({ level: 'silent' }),
-        printQRInTerminal: false,
+        printQRInTerminal: true,
+        browser: ['AutoElite Bot', 'Chrome', '1.0.0'],
     });
 
     sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
         if (qr) {
+            console.log('QR code generated');
             latestQR = qr;
-            console.log('QR code ready — visit your Render URL to scan it');
         }
         if (connection === 'close') {
             isConnected = false;
-            const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-            if (shouldReconnect) startBot();
+            const code = lastDisconnect?.error?.output?.statusCode;
+            console.log('Connection closed, code:', code);
+            if (code !== DisconnectReason.loggedOut) startBot();
         }
         if (connection === 'open') {
             isConnected = true;
             latestQR = null;
-            console.log('AutoElite WhatsApp bot is connected!');
+            console.log('Bot connected!');
         }
     });
 
@@ -89,4 +94,4 @@ async function startBot() {
     });
 }
 
-startBot();
+startBot().catch(console.error);
