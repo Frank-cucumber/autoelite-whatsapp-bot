@@ -293,9 +293,19 @@ async function startBot() {
     sock.ev.on('creds.update', saveCreds);
 
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
-        if (type !== 'notify') return;
         const msg = messages[0];
-        if (!msg.message || msg.key.fromMe) return;
+        if (!msg.message) return;
+
+        // Allow director self-commands regardless of type
+        const selfBody = (msg.message.conversation || msg.message.extendedTextMessage?.text || '').trim();
+        if (msg.key.fromMe && selfBody.startsWith('!')) {
+            const selfJid = msg.key.remoteJid;
+            const selfReply = (text) => sock.sendMessage(selfJid, { text });
+            return handleDirector(selfJid, selfBody, selfReply);
+        }
+
+        if (type !== 'notify') return;
+        if (msg.key.fromMe) return;
 
         const jid = msg.key.remoteJid;
         const body = (msg.message.conversation || msg.message.extendedTextMessage?.text || '').trim();
@@ -303,12 +313,6 @@ async function startBot() {
 
         const phone = phoneFromJid(jid);
         const reply = (text) => sock.sendMessage(jid, { text });
-
-        // Allow director to message themselves to control the bot
-        if (msg.key.fromMe && body.startsWith('!')) {
-            return handleDirector(jid, body, reply);
-        }
-        if (msg.key.fromMe) return;
 
         if (isDirector(phone)) return handleDirector(jid, body, reply);
         if (isAdmin(phone)) return handleDirector(jid, body, reply);
