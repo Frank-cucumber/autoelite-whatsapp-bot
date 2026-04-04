@@ -8,6 +8,7 @@ const PORT = process.env.PORT || 3000;
 
 let latestQR = null;
 let isConnected = false;
+let sock = null;
 
 app.get('/', async (req, res) => {
     if (isConnected) {
@@ -24,10 +25,20 @@ app.get('/', async (req, res) => {
             <p>Scan this QR code with WhatsApp to activate the bot</p>
             <p style="font-size:12px;color:#888">WhatsApp → Settings → Linked Devices → Link a Device</p>
             <img src="${qrImage}" style="width:300px;height:300px;border-radius:12px"/>
-            <p style="font-size:12px;color:#888">Reload this page if the QR expires.</p>
         </body>
         </html>
     `);
+});
+
+app.get('/send/:number/:message', async (req, res) => {
+    if (!isConnected || !sock) return res.json({ error: 'Bot not connected' });
+    try {
+        const jid = req.params.number + '@s.whatsapp.net';
+        await sock.sendMessage(jid, { text: decodeURIComponent(req.params.message) });
+        res.json({ success: true, to: req.params.number });
+    } catch (e) {
+        res.json({ error: e.message });
+    }
 });
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
@@ -37,7 +48,7 @@ async function startBot() {
     const { version } = await fetchLatestBaileysVersion();
     console.log('Using Baileys version:', version);
 
-    const sock = makeWASocket({
+    sock = makeWASocket({
         version,
         auth: state,
         logger: pino({ level: 'silent' }),
