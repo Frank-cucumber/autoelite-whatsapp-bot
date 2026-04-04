@@ -304,6 +304,12 @@ async function startBot() {
         const phone = phoneFromJid(jid);
         const reply = (text) => sock.sendMessage(jid, { text });
 
+        // Allow director to message themselves to control the bot
+        if (msg.key.fromMe && body.startsWith('!')) {
+            return handleDirector(jid, body, reply);
+        }
+        if (msg.key.fromMe) return;
+
         if (isDirector(phone)) return handleDirector(jid, body, reply);
         if (isAdmin(phone)) return handleDirector(jid, body, reply);
         return handleCustomer(jid, body, reply);
