@@ -262,6 +262,19 @@ app.get('/send/:number/:message', async (req, res) => {
 
 app.get('/inquiries', (req, res) => res.json(inquiries));
 
+app.get('/simulate/:number/:message', async (req, res) => {
+    const jid = req.params.number + '@s.whatsapp.net';
+    const body = decodeURIComponent(req.params.message);
+    const reply = async (text) => {
+        if (sock) await sock.sendMessage(jid, { text });
+    };
+    const phone = req.params.number;
+    if (isDirector(phone)) await handleDirector(jid, body, reply);
+    else if (isAdmin(phone)) await handleDirector(jid, body, reply);
+    else await handleCustomer(jid, body, reply);
+    res.json({ success: true, from: req.params.number, message: body });
+});
+
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
 // ── Bot ───────────────────────────────────────────────────
