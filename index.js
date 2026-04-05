@@ -27,6 +27,7 @@ let isConnected = false;
 let sock = null;
 const conversations = {}; // multi-step conversation state per jid
 const inquiries = [];     // store recent customer inquiries
+let controlGroupJid = null; // AutoElite Control group JID
 
 // ── Gist Auth State ───────────────────────────────────────
 async function useGistAuthState() {
@@ -287,6 +288,23 @@ async function startBot() {
             isConnected = true;
             latestQR = null;
             console.log('Bot connected!');
+            // Create control group if it doesn't exist yet
+            setTimeout(async () => {
+                try {
+                    const groups = await sock.groupFetchAllParticipating();
+                    const existing = Object.values(groups).find(g => g.subject === 'AutoElite Control');
+                    if (existing) {
+                        controlGroupJid = existing.id;
+                        console.log('Control group found:', controlGroupJid);
+                        await sock.sendMessage(controlGroupJid, { text: '✅ AutoElite Bot connected and ready!\n\nType !commands to see director controls.' });
+                    } else {
+                        const group = await sock.groupCreate('AutoElite Control', []);
+                        controlGroupJid = group.gid;
+                        console.log('Control group created:', controlGroupJid);
+                        await sock.sendMessage(controlGroupJid, { text: '👑 *AutoElite Control Panel*\n\nWelcome! This is your private bot control group.\n\nType !commands to get started.' });
+                    }
+                } catch (e) { console.log('Group setup error:', e.message); }
+            }, 3000);
         }
     });
 
@@ -296,9 +314,10 @@ async function startBot() {
         const msg = messages[0];
         if (!msg.message) return;
 
-        // Allow director self-commands regardless of type
+        // Handle control group messages and self-commands
         const selfBody = (msg.message.conversation || msg.message.extendedTextMessage?.text || '').trim();
-        if (msg.key.fromMe && selfBody.startsWith('!')) {
+        const isControlGroup = msg.key.remoteJid === controlGroupJid;
+        if ((msg.key.fromMe || isControlGroup) && selfBody.startsWith('!')) {
             const selfJid = msg.key.remoteJid;
             const selfReply = (text) => sock.sendMessage(selfJid, { text });
             return handleDirector(selfJid, selfBody, selfReply);
