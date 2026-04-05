@@ -265,14 +265,19 @@ app.get('/inquiries', (req, res) => res.json(inquiries));
 app.get('/simulate/:number/:message', async (req, res) => {
     const jid = req.params.number + '@s.whatsapp.net';
     const body = decodeURIComponent(req.params.message);
+    let botReply = null;
     const reply = async (text) => {
-        if (sock) await sock.sendMessage(jid, { text });
+        botReply = text;
+        // Send bot's response to director so they can see it
+        if (sock) await sock.sendMessage(ROLES.directors[0] + '@s.whatsapp.net', {
+            text: `🧪 *Simulate Test*\nCustomer (${req.params.number}): "${body}"\n\nBot reply:\n${text}`
+        });
     };
     const phone = req.params.number;
     if (isDirector(phone)) await handleDirector(jid, body, reply);
     else if (isAdmin(phone)) await handleDirector(jid, body, reply);
     else await handleCustomer(jid, body, reply);
-    res.json({ success: true, from: req.params.number, message: body });
+    res.json({ success: true, from: req.params.number, message: body, reply: botReply });
 });
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
